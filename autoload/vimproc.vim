@@ -1327,18 +1327,67 @@ function! s:vp_file_write(hd, timeout) dict
   return nleft
 endfunction
 
-function! s:quote_arg(arg)
-  return (a:arg == '' || a:arg =~ '[ "]') ?
-        \ '"' . substitute(a:arg, '"', '\\"', 'g') . '"' : a:arg
+function! s:quote_windows_cmd_arg(arg)
+  return (a:arg == '' || a:arg =~ '[ "^]') ?
+        \ '"' . substitute(a:arg, '["^]', '^&', 'g') . '"' : a:arg
 endfunction
+
+function! s:quote_windows_child_arg(arg) "{{{
+  let cmdline = ''
+  if a:arg == '' || a:arg =~ '[ \t\n\x16"]'
+    let cmdline .= '"'
+    let s = split(a:arg, '\zs')
+    let [i, max] = [0, len(s)]
+    while i < max
+      let backslashes = 0
+      while i < max && s[i] ==# '\'
+        let i += 1
+        let backslashes += 1
+      endwhile
+      if i == max
+        let cmdline .= repeat('\', backslashes * 2)
+        break
+      elseif s[i] == '"'
+        let cmdline .= repeat('\', backslashes * 2 + 1)
+      else
+        let cmdline .= repeat('\', backslashes)
+      endif
+      let cmdline .= s[i]
+      let i += 1
+    endwhile
+    let cmdline .= '"'
+  else
+    let cmdline .= a:arg
+  endif
+  return cmdline
+endfunction"}}}
+
+function! s:build_windows_cmdline(argv) "{{{
+  let cmdline = s:quote_windows_cmd_arg(substitute(a:argv[0], '/', '\', 'g'))
+  let cmdargs = map(a:argv[1:], 's:quote_windows_child_arg(v:val)')
+  if match(a:argv[0], '\c\%(\_^\|[/\\]\)cmd\%(.exe\)\?$') >= 0
+    " a:argv[0] is cmd.exe
+    let pos = match(cmdargs, '\c/[ckr]') + 1
+    if pos > 0
+      let cmdlen = len(cmdargs) - pos
+      if cmdlen == 1
+        let cmdargs[pos] = s:quote_windows_cmd_arg(a:argv[pos + 1])
+      elseif cmdlen >= 2
+        let cmdargs[pos] = s:quote_windows_cmd_arg(join(cmdargs[pos :], ' '))
+        unlet cmdargs[pos + 1:]
+      endif
+    endif
+  endif
+  if len(cmdargs)
+    let cmdline .= ' ' . join(cmdargs, ' ')
+  endif
+  return cmdline
+endfunction"}}}
 
 function! s:vp_pipe_open(npipe, hstdin, hstdout, hstderr, argv) "{{{
   try
     if vimproc#util#is_windows()
-      let cmdline = s:quote_arg(substitute(a:argv[0], '/', '\', 'g'))
-      for arg in a:argv[1:]
-        let cmdline .= ' ' . s:quote_arg(arg)
-      endfor
+      let cmdline = s:build_windows_cmdline(a:argv)
       let [pid; fdlist] = s:libcall('vp_pipe_open',
             \ [a:npipe, a:hstdin, a:hstdout, a:hstderr, cmdline])
     else
