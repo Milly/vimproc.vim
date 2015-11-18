@@ -29,8 +29,9 @@ set cpo&vim
 " }}}
 
 if !vimproc#util#is_windows()
-  function! vimproc#cmd#system(expr)
-    return vimproc#system(a:expr)
+  function! vimproc#cmd#system(expr, ...)
+    let timeout = get(a:000, 0, 0)
+    return vimproc#system(a:expr, '', timeout)
   endfunction
   let &cpo = s:save_cpo
   finish
@@ -39,13 +40,23 @@ endif
 " Based from : http://d.hatena.ne.jp/osyo-manga/20130611/1370950114
 
 let s:cmd = {}
+let s:read_timeout = 100
 
 augroup vimproc
   autocmd VimLeave * call s:cmd.close()
 augroup END
 
 
+function! s:print_error(string)
+  echohl Error | echomsg '[vimproc] ' . a:string | echohl None
+endfunction
+
 function! s:cmd.open() "{{{
+  if exists('self.vimproc') && self.vimproc.is_valid
+    " Already opened.
+    return
+  endif
+
   let cmd = 'cmd.exe'
   let self.vimproc = vimproc#popen2(cmd)
   let self.cwd = getcwd()
@@ -58,11 +69,15 @@ function! s:cmd.open() "{{{
 endfunction"}}}
 
 function! s:cmd.close() "{{{
-  call self.vimproc.waitpid()
+  if exists('self.vimproc')
+    call self.vimproc.waitpid()
+  endif
 endfunction"}}}
 
-function! s:cmd.system(cmd) "{{{
+function! s:cmd.system(cmd, timeout) "{{{
   " Execute cmd.
+  call self.open()
+
   if self.cwd !=# getcwd()
     " Execute cd.
     let input = '(cd /D "' . getcwd() . '" & ' . a:cmd . ')'
@@ -73,28 +88,58 @@ function! s:cmd.system(cmd) "{{{
 
   call self.vimproc.stdin.write(input . "\n")
 
+  if a:timeout > 0 && has('reltime') && v:version >= 702
+    let start = reltime()
+    let deadline = a:timeout
+    let timeout = a:timeout / 2
+  else
+    let start = 0
+    let deadline = 0
+    let timeout = s:read_timeout
+  endif
+
   " Wait until getting prompt.
   let output = ''
-  while 1
-    let output .= self.vimproc.stdout.read()
-    let lastnl = strridx(output, "\n")
-    if lastnl >= 0 &&
-          \ output[lastnl + 1:] =~ '^\%([A-Z]:\\\|\\\\.\+\\.\+\\\).*>$'
-      break
+  try
+    while !self.vimproc.stdout.eof
+      if deadline "{{{
+        " Check timeout.
+        let tick = reltimestr(reltime(start))
+        let elapse = str2nr(tick[:-8] . tick[-6:-4], 10)
+        if deadline <= elapse
+          " Kill process.
+          throw 'vimproc: vimproc#cmd#system(): Timeout.'
+        endif
+        let timeout = (deadline - elapse) / 2
+      endif"}}}
+
+      let output .= self.vimproc.stdout.read(-1, timeout)
+      let lastnl = strridx(output, "\n")
+      if lastnl >= 0 &&
+            \ output[lastnl + 1:] =~ '^\%([A-Z]:\\\|\\\\.\+\\.\+\\\).*>$'
+        break
+      endif
+    endwhile
+    let result = split(output, '\r\n\|\n')[1:-2]
+  catch
+    call self.close()
+    let result = split(output, '\r\n\|\n')[1:]
+
+    if v:exception !~ '^Vim:Interrupt'
+      call s:print_error(v:throwpoint)
+      call s:print_error(v:exception)
     endif
-  endwhile
-  let result = split(output, '\r\n\|\n')[1:-2]
+  endtry
 
   return join(result, "\n")
 endfunction"}}}
 
-call s:cmd.open()
-
-function! vimproc#cmd#system(expr)
+function! vimproc#cmd#system(expr, ...)
   let cmd = type(a:expr) == type('') ? a:expr :
         \ join(map(a:expr,
         \   'match(v:val, "\\s") >= 0 ? "\"".v:val."\"" : v:val'))
-  return s:cmd.system(cmd)
+  let timeout = get(a:000, 0, 0)
+  return s:cmd.system(cmd, timeout)
 endfunction
 
 " Restore 'cpoptions' {{{

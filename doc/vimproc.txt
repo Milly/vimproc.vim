@@ -249,7 +249,7 @@ vimproc#system_gui({expr})			*vimproc#system_gui()*
 		Same as |vimproc#system_bg()|.
 		Note: It is obsolete API.
 
-vimproc#cmd#system({expr})			*vimproc#cmd#system()*
+vimproc#cmd#system({expr} [, {timeout}])	*vimproc#cmd#system()*
 		Same as |vimproc#system()| on non-Windows platforms.
 		On Windows, it is similar to |vimproc#system()| but faster.
 		It executes a "cmd.exe" process in the background when it is

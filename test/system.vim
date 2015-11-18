@@ -125,4 +125,13 @@ function! s:suite.system_timeout()
         \ "Foo\n")
 endfunction
 
+function! s:suite.cmd_system_timeout()
+  call s:check_cmd('sleep')
+  call s:check_reltime()
+  call s:assert.equals(
+        \ vimproc#cmd#system('echo Foo && sleep 1 && echo Bar', 500),
+        \ vimproc#util#is_windows() ? "Foo " : "Foo\n")
+  call s:assert.equals(vimproc#cmd#system('echo Run after timeout'), "Run after timeout\n")
+endfunction
+
 " vim:foldmethod=marker:fen:
