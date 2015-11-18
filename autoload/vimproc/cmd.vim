@@ -47,7 +47,7 @@ augroup END
 
 function! s:cmd.open() "{{{
   let cmd = 'cmd.exe'
-  let self.vimproc = vimproc#popen3(cmd)
+  let self.vimproc = vimproc#popen2(cmd)
   let self.cwd = getcwd()
 
   " Wait until getting first prompt.

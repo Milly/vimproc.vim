@@ -103,6 +103,15 @@ function! s:suite.system_stderr()
   endif
 endfunction
 
+function! s:suite.cmd_system_stderr()
+  if vimproc#util#is_windows()
+    call s:assert.equals(vimproc#cmd#system('cmd /c "echo Foo 1>&2"'), "Foo \n")
+  else
+    call s:check_cmd('sh')
+    call s:assert.equals(vimproc#cmd#system('sh -c "echo Foo 1>&2"'), "Foo\n")
+  endif
+endfunction
+
 function! s:suite.system_input()
   call s:check_cmd('cat')
   call s:assert.equals(vimproc#system('cat', "Foo\n"), "Foo\n")
