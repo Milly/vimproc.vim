@@ -109,5 +109,10 @@ echo Downloading Vim
 appveyor DownloadFile http://files.kaoriya.net/vim/vim74-kaoriya-win%BIT%.zip -FileName vim.zip
 echo Installing Vim
 7z x vim.zip > nul
+echo Installing vim-themis
 git clone -q https://github.com/thinca/vim-themis.git themis --depth=1
+echo Installing GnuWin32
+appveyor DownloadFile http://jaist.dl.sourceforge.net/project/gnuwin32/coreutils/5.3.0/coreutils-5.3.0-bin.zip -FileName coreutils.zip
+7z e coreutils.zip bin\gecho.exe > nul
+if not exist gecho.exe echo File not found: gecho.exe
 exit /b

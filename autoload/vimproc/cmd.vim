@@ -28,6 +28,116 @@ let s:save_cpo = &cpo
 set cpo&vim
 " }}}
 
+let s:meta_chars = '()%!^"<>&|'
+
+function! s:quote_cmd_arg(arg, meta_chars) "{{{
+  if strlen(a:arg) && a:arg !~ '[[:space:]"' . a:meta_chars . ']'
+    return a:arg
+  endif
+  let res = '"'
+  let in_quote = 0
+  let even_quote = 1
+  let s = split(a:arg, '\zs')
+  let [i, max] = [0, len(s)]
+  while i < max
+    let backslashes = 0
+    while i < max && s[i] ==# '\'
+      let i += 1
+      let backslashes += 1
+    endwhile
+    let res .= repeat('\', backslashes)
+    if s[i] ==# '"'
+      let in_quote = (backslashes % 2 == 0) ? !in_quote : in_quote
+      let even_quote = !even_quote
+    elseif in_quote && even_quote && stridx(a:meta_chars, s[i]) >= 0
+      let res .= '^'
+    endif
+    let res .= s[i]
+    let i += 1
+  endwhile
+  let res .= '"'
+  return res
+endfunction"}}}
+
+function! s:quote_proc_arg(arg, meta_chars, even_quote) "{{{
+  if strlen(a:arg) && a:arg !~ '[[:space:]"' . a:meta_chars . ']'
+    return [a:arg, a:even_quote]
+  endif
+  let res = '"'
+  let even_quote = !a:even_quote
+  let s = split(a:arg, '\zs')
+  let [i, max] = [0, len(s)]
+  while i < max
+    let backslashes = 0
+    while i < max && s[i] ==# '\'
+      let i += 1
+      let backslashes += 1
+    endwhile
+    if i == max
+      let res .= repeat('\', backslashes * 2)
+      break
+    elseif s[i] ==# '"'
+      let res .= repeat('\', backslashes * 2 + 1)
+      let even_quote = !even_quote
+    else
+      let res .= repeat('\', backslashes)
+      if even_quote && stridx(a:meta_chars, s[i]) >= 0
+        let res .= '^'
+      endif
+    endif
+    let res .= s[i]
+    let i += 1
+  endwhile
+  let res .= '"'
+  return [res, !even_quote]
+endfunction"}}}
+
+function! s:build_cmdline(argv, console) "{{{
+  if empty(a:argv)
+    return ''
+  endif
+
+  if a:console
+    let [meta1, meta2] = [s:meta_chars, '']
+  else
+    let [meta1, meta2] = ['', s:meta_chars]
+  endif
+
+  let arg0 = '"' . substitute(
+        \ substitute(a:argv[0], '/', '\', 'g'),
+        \ '"', '""', 'g') . '"'
+  let even_quote = 1
+  let args = []
+  for arg in a:argv[1:]
+    let [quoted, even_quote] = s:quote_proc_arg(arg, meta1, even_quote)
+    call add(args, quoted)
+  endfor
+
+  " check a:argv[0] is cmd.exe
+  if match(a:argv[0], '\c\%(\_^\|[/\\]\)cmd\%(.exe\)\?$') >= 0
+    let pos = match(args, '\c/[ckr]') + 1
+    if pos > 0
+      let cmdlen = len(args) - pos
+      if cmdlen == 1
+        let args[pos] = s:quote_cmd_arg(a:argv[pos + 1], s:meta_chars)
+      elseif cmdlen >= 2
+        let args[pos] = s:quote_cmd_arg(join(args[pos :]), meta2)
+        unlet args[pos + 1:]
+      endif
+    endif
+  endif
+
+  return join([arg0] + args)
+endfunction"}}}
+
+function! vimproc#cmd#build_cmdline(argv)
+  return s:build_cmdline(a:argv, 0)
+endfunction
+
+function! vimproc#cmd#shellescape(string)
+  return s:quote_proc_arg(a:string, '', 0)[0]
+endfunction
+
 if !vimproc#util#is_windows()
   function! vimproc#cmd#system(expr, ...)
     let timeout = get(a:000, 0, 0)
@@ -143,9 +253,7 @@ function! s:cmd.system(cmd, timeout) "{{{
 endfunction"}}}
 
 function! vimproc#cmd#system(expr, ...)
-  let cmd = type(a:expr) == type('') ? a:expr :
-        \ join(map(a:expr,
-        \   'match(v:val, "\\s") >= 0 ? "\"".v:val."\"" : v:val'))
+  let cmd = type(a:expr) == type('') ? a:expr : s:build_cmdline(a:expr, 1)
   let timeout = get(a:000, 0, 0)
   return s:cmd.system(cmd, timeout)
 endfunction

@@ -17,6 +17,15 @@ function! s:check_reltime()
   endif
 endfunction
 
+function! s:get_echo()
+  if vimproc#util#is_windows()
+    " require GNU Coreutils `gecho.exe` in Windows
+    call s:check_cmd('gecho')
+    return 'gecho'
+  endif
+  return 'echo'
+endfunction
+
 function! s:suite.system1()
   call s:check_ls()
   call s:assert.equals(vimproc#system('ls'), system('ls'))
@@ -37,10 +46,72 @@ function! s:suite.cmd_system2()
   call s:assert.equals(vimproc#cmd#system(['ls']), system('ls'))
 endfunction
 
-function! s:suite.cmd_system3()
+function! s:suite.system_quote1()
+  let echo = s:get_echo()
   call s:assert.equals(
-        \ vimproc#cmd#system(['echo', '"Foo"']),
-        \ "\"Foo\"\n")
+        \ vimproc#system([echo, '"Foo\"\\"&ls()%!<>|\', '', ' &ls ']),
+        \ '"Foo\"\\"&ls()%!<>|\   &ls '."\n")
+endfunction
+
+function! s:suite.system_quote2()
+  let echo = s:get_echo()
+  call s:assert.equals(
+        \ vimproc#system([echo, '"Foo\"\\" &ls ^&ls', ' &ls ']),
+        \ '"Foo\"\\" &ls ^&ls  &ls '."\n")
+endfunction
+
+function! s:suite.system_quote3()
+  if !vimproc#util#is_windows()
+    call s:assert.skip('')
+  endif
+  let echo = s:get_echo()
+  call s:assert.equals(
+        \ vimproc#system(['cmd', '/c', echo, '"Foo\"\\" &ls ^&ls', '', ' &ls ']),
+        \ '"Foo\"\\" &ls ^&ls   &ls '."\n")
+endfunction
+
+function! s:suite.system_quote4()
+  if !vimproc#util#is_windows()
+    call s:assert.skip('')
+  endif
+  let echo = s:get_echo()
+  call s:assert.equals(
+        \ vimproc#system(['cmd', '/c', echo . ' "\"Foo\\\"\\\\\" &ls ^&ls" "" " &ls "']),
+        \ '"Foo\"\\" &ls ^&ls   &ls '."\n")
+endfunction
+
+function! s:suite.cmd_system_quote1()
+  let echo = s:get_echo()
+  call s:assert.equals(
+        \ vimproc#cmd#system([echo, '"Foo\"\\"&ls()%!<>|\', '', ' &ls ']),
+        \ '"Foo\"\\"&ls()%!<>|\   &ls '."\n")
+endfunction
+
+function! s:suite.cmd_system_quote2()
+  let echo = s:get_echo()
+  call s:assert.equals(
+        \ vimproc#cmd#system([echo, '"Foo\"\\" &ls ^&ls', ' &ls ']),
+        \ '"Foo\"\\" &ls ^&ls  &ls '."\n")
+endfunction
+
+function! s:suite.cmd_system_quote3()
+  if !vimproc#util#is_windows()
+    call s:assert.skip('')
+  endif
+  let echo = s:get_echo()
+  call s:assert.equals(
+        \ vimproc#cmd#system(['cmd', '/c', echo, '"Foo\"\\" &ls ^&ls', '', ' &ls ']),
+        \ '"Foo\"\\" &ls ^&ls   &ls '."\n")
+endfunction
+
+function! s:suite.cmd_system_quote4()
+  if !vimproc#util#is_windows()
+    call s:assert.skip('')
+  endif
+  let echo = s:get_echo()
+  call s:assert.equals(
+        \ vimproc#cmd#system(['cmd', '/c', echo . ' "\"Foo\\\"\\\\\" &ls ^&ls" "" " &ls "']),
+        \ '"Foo\"\\" &ls ^&ls   &ls '."\n")
 endfunction
 
 function! s:suite.system_passwd1()
