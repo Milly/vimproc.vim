@@ -46,6 +46,20 @@ function! s:suite.cmd_system2()
   call s:assert.equals(vimproc#cmd#system(['ls']), system('ls'))
 endfunction
 
+function! s:suite.system_quote00()
+  let echo = s:get_echo()
+  call s:assert.equals(
+        \ vimproc#system(['echo', 'Foo']),
+        \ "Foo\n")
+endfunction
+
+function! s:suite.system_quote0()
+  let echo = s:get_echo()
+  call s:assert.equals(
+        \ vimproc#system([echo, 'Foo']),
+        \ "Foo\n")
+endfunction
+
 function! s:suite.system_quote1()
   let echo = s:get_echo()
   call s:assert.equals(
