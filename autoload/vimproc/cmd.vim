@@ -43,6 +43,7 @@ let s:cmd = {}
 let s:read_timeout = 100
 let s:prompt = '_-_EOF_-_$L$P$G'
 let s:prompt_match = '^_-_EOF_-_<[^>]*>'
+let s:prompt_cwd_match = '<\zs[^>]*\ze>'
 
 augroup vimproc
   autocmd VimLeave * call s:cmd.close()
@@ -123,6 +124,10 @@ function! s:cmd.system(cmd, timeout) "{{{
         break
       endif
     endwhile
+    let self.cwd = matchstr(output, s:prompt_cwd_match, lastnl + 1)
+    if &ssl
+      let self.cwd = substitute(self.cwd, '\\', '/', 'g')
+    endif
     let result = split(output, '\r\n\|\n')[1:-2]
   catch
     call self.close()
