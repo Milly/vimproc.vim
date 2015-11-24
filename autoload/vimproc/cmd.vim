@@ -41,6 +41,8 @@ endif
 
 let s:cmd = {}
 let s:read_timeout = 100
+let s:prompt = '_-_EOF_-_$L$P$G'
+let s:prompt_match = '^_-_EOF_-_<[^>]*>'
 
 augroup vimproc
   autocmd VimLeave * call s:cmd.close()
@@ -62,9 +64,11 @@ function! s:cmd.open() "{{{
   let self.cwd = getcwd()
 
   " Wait until getting first prompt.
+  call self.vimproc.stdin.write("prompt " . s:prompt . "\n")
   let output = ''
-  while output !~ '.\+>$'
+  while output !~ s:prompt_match
     let output .= self.vimproc.stdout.read()
+    let output = strpart(output, strridx(output, "\n") + 1)
   endwhile
 endfunction"}}}
 
@@ -115,8 +119,7 @@ function! s:cmd.system(cmd, timeout) "{{{
 
       let output .= self.vimproc.stdout.read(-1, timeout)
       let lastnl = strridx(output, "\n")
-      if lastnl >= 0 &&
-            \ output[lastnl + 1:] =~ '^\%([A-Z]:\\\|\\\\.\+\\.\+\\\).*>$'
+      if lastnl >= 0 && match(output, s:prompt_match, lastnl + 1) >= 0
         break
       endif
     endwhile
